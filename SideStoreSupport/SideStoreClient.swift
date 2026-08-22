@@ -64,25 +64,20 @@ struct SideStoreIntentCaller {
         let _ = try await intent.perform()
     }
     
-    // call this when no IntentContext exists (when sidestore is loaded in LiveProcess)
-    func callRefreshIntent2(identifier: String, mangledTypeName: String, progressCallback: (Progress)->Void ) async throws {
-        try await withUnsafeThrowingContinuation { (c: UnsafeContinuation<(), any Error>) in
-            let parent = PrivateIntentRunner.run(
-                        identifier: identifier,
-                        mangledTypeName: mangledTypeName
-                    ) { result, error in
-                        print("performAction result=\(String(describing: result)), " +
-                              "error=\(String(describing: error))")
-                        if let error {
-                            c.resume(throwing: error)
-                        } else {
-                            c.resume()
-                        }
-                    }
-            if let parent {
-                progressCallback(parent)
-            }
+    // Call this when SideStore is loaded in LiveProcess. The outer LiveContainer
+    // shortcut already provides the AppIntent execution context, so starting a
+    // second action through LNAppContext is treated as a nested action and can be
+    // cancelled by the system before SideStore's refresh code is reached.
+    // Execute the loaded SideStore intent directly instead.
+    func callRefreshIntent2(identifier _: String, mangledTypeName: String, progressCallback: (Progress)->Void ) async throws {
+        let resolvedType = try resolveType(mangledTypeName)
+        guard let intentType = resolvedType as? any ProgressReportingIntent.Type else {
+            throw SideStoreIntentError.typeIsNotAppIntent(mangledTypeName)
         }
+
+        let intent = intentType.init()
+        progressCallback(intent.progress)
+        let _ = try await intent.perform()
     }
 }
 
