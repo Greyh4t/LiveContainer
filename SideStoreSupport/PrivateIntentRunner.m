@@ -5,6 +5,7 @@
 #import <dlfcn.h>
 #import <mach/mach.h>
 #import <mach/task_info.h>
+#import <objc/message.h>
 
 static NSString *const PrivateIntentErrorDomain = @"PrivateIntentRunner";
 
@@ -17,6 +18,21 @@ static NSError *PrivateIntentError(NSInteger code, NSString *description) {
 }
 
 @implementation PrivateIntentRunner
+
++ (BOOL)runSideStoreRefreshWithProgress:(NSProgress *)progress
+                             completion:(SideStoreRefreshCompletion)completion {
+    Class bridgeClass = NSClassFromString(@"SideStoreLiveProcessRefreshBridge");
+    SEL selector = NSSelectorFromString(@"refreshAllAppsWithProgress:completion:");
+    if (bridgeClass == Nil || ![bridgeClass respondsToSelector:selector]) {
+        completion(PrivateIntentError(5, @"SideStore background refresh bridge is unavailable"));
+        return NO;
+    }
+
+    typedef void (*SideStoreRefreshFunction)(id, SEL, NSProgress *, SideStoreRefreshCompletion);
+    SideStoreRefreshFunction function = (SideStoreRefreshFunction)objc_msgSend;
+    function(bridgeClass, selector, progress, completion);
+    return YES;
+}
 
 + (NSProgress *)runWithIdentifier:(NSString *)identifier
                   mangledTypeName:(NSString *)mangledTypeName
