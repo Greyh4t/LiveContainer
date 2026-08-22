@@ -611,7 +611,11 @@ static NSString* invokeAppMain(NSString *selectedApp, NSString *selectedContaine
     }
     
     if(sideStoreExist) {
-        if (!isLiveProcess && (isSideStore || ![guestAppInfo[@"dontInjectTweakLoader"] boolValue])) {
+        // SideStoreSupport owns the host app's AppIntent implementations. Keep it loaded
+        // even when the selected guest disables tweak injection, otherwise Shortcuts can
+        // discover the intent metadata but cannot resolve its implementation while that
+        // guest is running.
+        if (!isLiveProcess) {
             dlopen([lcMainBundle.bundlePath stringByAppendingPathComponent:@"Frameworks/SideStoreSupport.framework/SideStoreSupport"].UTF8String, RTLD_LAZY);
         } else if (isLiveProcess && isSideStore) {
             dlopen([lcMainBundle.bundlePath stringByAppendingPathComponent:@"../../Frameworks/SideStoreSupport.framework/SideStoreSupport"].UTF8String, RTLD_LAZY);
