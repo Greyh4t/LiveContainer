@@ -45,14 +45,13 @@ void installSideStoreHooks(void);
     handler.connection.exportedObject = SideStoreClient.shared;
 
     [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(appDidFinishLaunching:)
-                                                 name:UIApplicationDidFinishLaunchingNotification
+                                             selector:@selector(sideStoreBootSequenceDidFinish:)
+                                                 name:@"io.sidestore.BootSequenceDidFinish"
                                                object:nil];
 }
 
-// Implement the callback method
-+ (void)appDidFinishLaunching:(NSNotification *)notification {
-    NSDictionary *launchOptions = notification.userInfo;
++ (void)sideStoreBootSequenceDidFinish:(NSNotification *)notification {
+    NSLog(@"SideStore boot sequence completed; background refresh is ready");
     [handler.server finishedLaunching];
 }
 

@@ -72,14 +72,25 @@ int LiveProcessMain(int argc, char *argv[]) {
     for(int i = 0; i < bookmarks.count; i++) {
         bool isStale = false;
         NSError* error = nil;
-        bookmarkedUrls[i] = [NSURL URLByResolvingBookmarkData:bookmarks[i] options:0 relativeToURL:nil bookmarkDataIsStale:&isStale error:&error];
-        access = [bookmarkedUrls[i] startAccessingSecurityScopedResource];
+        NSURL *resolvedURL = [NSURL URLByResolvingBookmarkData:bookmarks[i] options:0 relativeToURL:nil bookmarkDataIsStale:&isStale error:&error];
+        if(!resolvedURL || error || isStale) {
+            NSLog(@"Failed to resolve bookmark %d (stale=%d): %@", i, isStale, error);
+            continue;
+        }
+        if(![resolvedURL startAccessingSecurityScopedResource]) {
+            NSLog(@"Failed to access security-scoped bookmark %d at %@", i, resolvedURL.path);
+            continue;
+        }
+        [bookmarkedUrls addObject:resolvedURL];
+        access = true;
     }
     
     if ([appInfo[@"selected"] isEqualToString:@"builtinSideStore"]) {
-        if(access && bookmarkedUrls.count > 0) {
-            [lcUserDefaults setObject:bookmarkedUrls.firstObject.path forKey:@"specifiedSideStoreContainerPath"];
+        if(!access || bookmarkedUrls.count == 0) {
+            NSLog(@"Unable to launch built-in SideStore: no valid container bookmark");
+            return 1;
         }
+        [lcUserDefaults setObject:bookmarkedUrls.firstObject.path forKey:@"specifiedSideStoreContainerPath"];
         NSXPCListenerEndpoint* endpoint = appInfo[@"endpoint"];
 
         NSXPCConnection* connection = [[NSXPCConnection alloc] initWithListenerEndpoint:endpoint];
