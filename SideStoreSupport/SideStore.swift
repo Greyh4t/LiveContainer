@@ -13,7 +13,7 @@ import UserNotifications
 func performIntentRefresh(identifier: String, mangledTypeName: String, intentProgress: Progress) async throws {
     intentProgress.totalUnitCount = 100
     if UserDefaults.isSideStore() {
-        try await SideStoreIntentCaller.shared.callRefreshIntent(mangledTypeName: mangledTypeName)
+        try await SideStoreIntentCaller.shared.callRefreshIntent(mangledTypeName: mangledTypeName, progress: intentProgress)
     } else {
         RefreshHandler.shared.progress = intentProgress
         try await RefreshHandler.shared.startRefresh(identifier: identifier, mangledName: mangledTypeName)

@@ -52,25 +52,8 @@ private func resolveType(_ mangledTypeName: String) throws -> any Any.Type {
 @available(iOS 17.0, *)
 struct SideStoreIntentCaller {
     static let shared = SideStoreIntentCaller()
-    
-    // call this when a IntentContext already exists (when sidestore is loaded in LiveContainer itself)
-    func callRefreshIntent(mangledTypeName: String) async throws {
-        let resolvedType = try resolveType(mangledTypeName)
-        guard let intentType = resolvedType as? any ProgressReportingIntent.Type else {
-            throw SideStoreIntentError.typeIsNotAppIntent(mangledTypeName)
-        }
-        
-        let intent = intentType.init()
-        let _ = try await intent.perform()
-    }
-    
-    // SideStore is loaded in LiveProcess without its own AppIntent execution
-    // context. Invoke SideStore's ordinary background-refresh bridge rather than
-    // nesting or manually performing another AppIntent.
-    func callRefreshIntent2(identifier _: String, mangledTypeName _: String, progressCallback: (Progress)->Void ) async throws {
-        let progress = Progress(totalUnitCount: 1)
-        progressCallback(progress)
 
+    private func callBackgroundRefresh(progress: Progress) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
             PrivateIntentRunner.runSideStoreRefresh(progress: progress) { error in
                 if let error {
@@ -80,6 +63,22 @@ struct SideStoreIntentCaller {
                 }
             }
         }
+    }
+
+    // SideStore is already loaded in the current LiveContainer process. Reuse
+    // its ordinary refresh bridge; manually performing another AppIntent still
+    // creates a nested intent and is cancelled on a background cold launch.
+    func callRefreshIntent(mangledTypeName _: String, progress: Progress) async throws {
+        try await callBackgroundRefresh(progress: progress)
+    }
+
+    // SideStore is loaded in LiveProcess without its own AppIntent execution
+    // context. Invoke SideStore's ordinary background-refresh bridge rather than
+    // nesting or manually performing another AppIntent.
+    func callRefreshIntent2(identifier _: String, mangledTypeName _: String, progressCallback: (Progress)->Void ) async throws {
+        let progress = Progress(totalUnitCount: 1)
+        progressCallback(progress)
+        try await callBackgroundRefresh(progress: progress)
     }
 }
 
