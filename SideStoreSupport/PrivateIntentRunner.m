@@ -23,6 +23,15 @@ static NSError *PrivateIntentError(NSInteger code, NSString *description) {
                        completion:(PrivateIntentCompletion)completion {
     NSError *error = nil;
     audit_token_t auditToken = {};
+    mach_msg_type_number_t auditTokenCount = TASK_AUDIT_TOKEN_COUNT;
+    kern_return_t auditTokenResult = task_info(mach_task_self(),
+                                                TASK_AUDIT_TOKEN,
+                                                (task_info_t)&auditToken,
+                                                &auditTokenCount);
+    if (auditTokenResult != KERN_SUCCESS) {
+        completion(nil, PrivateIntentError(4, [NSString stringWithFormat:@"Unable to obtain process audit token: %d", auditTokenResult]));
+        return nil;
+    }
 
     Class actionClass = NSClassFromString(@"LNAction");
     Class optionsClass = NSClassFromString(@"LNActionExecutorOptions");
@@ -43,12 +52,20 @@ static NSError *PrivateIntentError(NSInteger code, NSString *description) {
 
     LNAppContext* context = [[contextClass alloc] init];
     NSProgress *reportingProgress = [NSProgress progressWithTotalUnitCount:1];
+    __block LNAppContext *retainedContext = context;
+    PrivateIntentCompletion retainedCompletion = ^(id result, NSError *completionError) {
+        // LNAppContext owns the in-flight request. Keep it alive until the
+        // asynchronous completion callback or the system cancels the action.
+        (void)retainedContext;
+        completion(result, completionError);
+        retainedContext = nil;
+    };
     [context performAction:action
                    options:options
          reportingProgress:reportingProgress
                   delegate:nil
                 auditToken:&auditToken
-         completionHandler:completion];
+         completionHandler:retainedCompletion];
     return reportingProgress;
 }
 
