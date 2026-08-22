@@ -71,7 +71,7 @@ struct SideStoreIntentCaller {
         let progress = Progress(totalUnitCount: 1)
         progressCallback(progress)
 
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
             PrivateIntentRunner.runSideStoreRefresh(progress: progress) { error in
                 if let error {
                     continuation.resume(throwing: error)
