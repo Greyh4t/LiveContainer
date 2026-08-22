@@ -54,14 +54,22 @@ struct SideStoreIntentCaller {
     static let shared = SideStoreIntentCaller()
 
     private func callBackgroundRefresh(progress: Progress) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
-            PrivateIntentRunner.runSideStoreRefresh(progress: progress) { error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume()
+        do {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+                PrivateIntentRunner.runSideStoreRefresh(progress: progress) { error in
+                    if let error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume()
+                    }
                 }
             }
+        } catch {
+            throw NSError(
+                domain: "SideStoreBackgroundRefresh",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "SideStore background bridge failed: \(error.localizedDescription)"]
+            )
         }
     }
 
