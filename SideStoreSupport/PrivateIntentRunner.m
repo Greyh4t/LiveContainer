@@ -1,10 +1,5 @@
 #import "PrivateIntentRunner.h"
-#import "AppIntentsPrivate.h"
-
-#import <bsm/audit.h>
-#import <dlfcn.h>
-#import <mach/mach.h>
-#import <mach/task_info.h>
+#import <objc/message.h>
 
 static NSString *const PrivateIntentErrorDomain = @"PrivateIntentRunner";
 
@@ -18,38 +13,18 @@ static NSError *PrivateIntentError(NSInteger code, NSString *description) {
 
 @implementation PrivateIntentRunner
 
-+ (NSProgress *)runWithIdentifier:(NSString *)identifier
-                  mangledTypeName:(NSString *)mangledTypeName
-                       completion:(PrivateIntentCompletion)completion {
-    NSError *error = nil;
-    audit_token_t auditToken = {};
-
-    Class actionClass = NSClassFromString(@"LNAction");
-    Class optionsClass = NSClassFromString(@"LNActionExecutorOptions");
-    Class contextClass = NSClassFromString(@"LNAppContext");
-    if (actionClass == Nil || optionsClass == Nil || contextClass == Nil) {
-        completion(nil, PrivateIntentError(3, @"Required private class is unavailable"));
-        return nil;
++ (BOOL)runSideStoreRefreshWithProgress:(NSProgress *)progress
+                             completion:(SideStoreRefreshCompletion)completion {
+    Class bridgeClass = NSClassFromString(@"SideStoreLiveProcessRefreshBridge");
+    SEL selector = NSSelectorFromString(@"refreshAllAppsWithProgress:completion:");
+    if (bridgeClass == Nil || ![bridgeClass respondsToSelector:selector]) {
+        completion(PrivateIntentError(5, @"SideStore background refresh is unavailable"));
+        return NO;
     }
 
-    LNAction* action = [[actionClass alloc] initWithIdentifier:identifier
-                                                    mangledTypeName:mangledTypeName
-                                                      openAppWhenRun:NO
-                                                         parameters:@[]];
-    LNActionExecutorOptions* options = [[optionsClass alloc] init];
-    options.clientLabel = @"PrivateProgressDemo";
-    options.kind = 2; // LNActionExecutorOptions kind: App Shortcut
-    options.donateToTranscript = NO;
-
-    LNAppContext* context = [[contextClass alloc] init];
-    NSProgress *reportingProgress = [NSProgress progressWithTotalUnitCount:1];
-    [context performAction:action
-                   options:options
-         reportingProgress:reportingProgress
-                  delegate:nil
-                auditToken:&auditToken
-         completionHandler:completion];
-    return reportingProgress;
+    typedef void (*SideStoreRefreshFunction)(id, SEL, NSProgress *, SideStoreRefreshCompletion);
+    ((SideStoreRefreshFunction)objc_msgSend)(bridgeClass, selector, progress, completion);
+    return YES;
 }
 
 @end

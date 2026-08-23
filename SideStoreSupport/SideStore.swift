@@ -13,7 +13,7 @@ import UserNotifications
 func performIntentRefresh(identifier: String, mangledTypeName: String, intentProgress: Progress) async throws {
     intentProgress.totalUnitCount = 100
     if UserDefaults.isSideStore() {
-        try await SideStoreIntentCaller.shared.callRefreshIntent(mangledTypeName: mangledTypeName)
+        try await SideStoreIntentCaller.shared.callRefreshIntent(mangledTypeName: mangledTypeName, progress: intentProgress)
     } else {
         RefreshHandler.shared.progress = intentProgress
         try await RefreshHandler.shared.startRefresh(identifier: identifier, mangledName: mangledTypeName)
@@ -75,6 +75,7 @@ class RefreshHandler: NSObject, RefreshServer {
     var sideStorePid: Int32 = 0
     var client: RefreshClient? = nil
     var ext: NSExtension? = nil
+    var didFinishLaunching = false
     
     static var shared = RefreshHandler()
     
@@ -102,7 +103,9 @@ class RefreshHandler: NSObject, RefreshServer {
         if (sideStorePid <= 0 || getpgid(sideStorePid) <= 0) && launchContinuation == nil {
             let lcHome = String(cString:getenv("LC_HOME_PATH"))
             let sideStoreHomeURL = URL(fileURLWithPath: lcHome).appendingPathComponent("Documents/SideStore")
-            let bookmarkData = bookmarkForURL(sideStoreHomeURL)!
+            guard let bookmarkData = bookmarkForURL(sideStoreHomeURL) else {
+                throw NSError(domain: "SideStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unable to access the built-in SideStore data directory."])
+            }
 
             // start LiveProcess
             let extensionItem = NSExtensionItem()
@@ -130,18 +133,26 @@ class RefreshHandler: NSObject, RefreshServer {
                 return
             }
             self.ext = ext
+            self.didFinishLaunching = false
             
             ext.setRequestInterruptionBlock { uuid in
                 self.c?.resume(throwing: NSError(domain: "SideStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "Built-in SideStore quit unexpectedly"]))
                 self.c = nil
                 self.sideStorePid = 0
+                self.launchContinuation?.resume(throwing: NSError(domain: "SideStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "Built-in SideStore quit while starting"]))
                 self.launchContinuation = nil
+                self.client = nil
+                self.didFinishLaunching = false
             }
             
             let uuid = await ext.beginRequest(withInputItems: [extensionItem])
             sideStorePid = ext.pid(forRequestIdentifier: uuid)
             
             try await withUnsafeThrowingContinuation { c in
+                if self.didFinishLaunching {
+                    c.resume()
+                    return
+                }
                 self.launchContinuation = c
                 DispatchQueue.main.asyncAfter(deadline: .now() + 300) {
                     if let c = self.launchContinuation {
@@ -152,10 +163,13 @@ class RefreshHandler: NSObject, RefreshServer {
                 }
             }
         }
-        self.client?.refreshAllApps(withIdentifier: identifier, mangledTypeName: mangledName)
-        
+        guard let client = self.client else {
+            throw NSError(domain: "SideStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "Built-in SideStore failed to connect."])
+        }
+
         try await withUnsafeThrowingContinuation { c in
             self.c = c
+            client.refreshAllApps(withIdentifier: identifier, mangledTypeName: mangledName)
         }
         
     }
@@ -180,6 +194,7 @@ class RefreshHandler: NSObject, RefreshServer {
     }
     
     func finishedLaunching() {
+        didFinishLaunching = true
         launchContinuation?.resume()
         launchContinuation = nil
     }

@@ -7,7 +7,6 @@
 #include "../LiveContainer/utils.h"
 #include "../LiveContainer/LCSharedUtils.h"
 #include "XPCServer.h"
-#import <sys/sysctl.h>
 @import UserNotifications;
 @import UIKit;
 
@@ -18,21 +17,6 @@
 
 - (UNAuthorizationStatus)authorizationStatus {
     return UNAuthorizationStatusAuthorized;
-}
-
-@end
-
-static NSMutableDictionary<NSString *, UIWindow *> *SSVersionWindows;
-static id SSSceneObserver;
-
-@interface PassthroughWindow : UIWindow
-@end
-
-@implementation PassthroughWindow
-
-- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event
-{
-    return nil;
 }
 
 @end
@@ -129,68 +113,6 @@ void SideStoreMyAppsViewController_hook_escapeButtonTapped(UICollectionViewContr
 
 
 
-static void SSInstallVersionWindow(UIWindowScene *windowScene)
-{
-    NSString *identifier = windowScene.session.persistentIdentifier;
-    if (identifier.length == 0 || SSVersionWindows[identifier] != nil) {
-        return;
-    }
-    
-    
-    NSString* LCVersion = [NSString stringWithFormat:@"%@-%@",
-                         NSUserDefaults.lcMainBundle.infoDictionary[@"CFBundleShortVersionString"],
-                         NSUserDefaults.lcMainBundle.infoDictionary[@"LCVersionInfo"]];
-    
-    NSString* SSVersion = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
-    
-    NSString *osVersion = [[UIDevice currentDevice] systemVersion];
-    size_t size = 32;
-    char iosBuild[32];
-    sysctlbyname("kern.osversion", iosBuild, &size, NULL, 0);
-    bool isPhone = UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPhone;
-    NSString* allVersionString = [NSString stringWithFormat:isPhone ? @"LC %@, SS %@\niOS %@ (%s)" : @"LC %@, SS %@, iOS %@ (%s)", LCVersion, SSVersion, osVersion, iosBuild];
-
-    UILabel* versionLabel = [UILabel new];
-    versionLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    versionLabel.font = [UIFont systemFontOfSize:9 weight:UIFontWeightRegular];
-    versionLabel.textColor = UIColor.labelColor;
-    versionLabel.textAlignment = NSTextAlignmentCenter;
-    versionLabel.userInteractionEnabled = NO;
-    versionLabel.text = allVersionString;
-    versionLabel.numberOfLines = 0;
-    versionLabel.lineBreakMode = NSLineBreakByWordWrapping;
-    
-    UIViewController *rootController = [[UIViewController alloc] init];
-    rootController.view.backgroundColor = UIColor.clearColor;
-    [rootController.view addSubview:versionLabel];
-    
-    if(windowScene.keyWindow.safeAreaInsets.bottom == 0) {
-        // old devices with no bottom safe area
-        [NSLayoutConstraint activateConstraints:@[
-            [versionLabel.centerXAnchor constraintEqualToAnchor:rootController.view.centerXAnchor],
-            [versionLabel.topAnchor constraintEqualToAnchor: rootController.view.safeAreaLayoutGuide.topAnchor]
-        ]];
-    } else {
-        // new devices
-        [NSLayoutConstraint activateConstraints:@[
-            [versionLabel.centerXAnchor constraintEqualToAnchor:rootController.view.centerXAnchor],
-            [versionLabel.bottomAnchor constraintEqualToAnchor: rootController.view.safeAreaLayoutGuide.bottomAnchor
-                                                      constant: isPhone ? 22 : 0]
-        ]];
-    }
-    PassthroughWindow *window = [[PassthroughWindow alloc] initWithWindowScene:windowScene];
-
-    window.rootViewController = rootController;
-    window.backgroundColor = UIColor.clearColor;
-
-    window.windowLevel = UIWindowLevelAlert;
-
-    window.hidden = NO;
-
-    SSVersionWindows[identifier] = window;
-}
-
-
 void installSideStoreHooks(void) {
 
     swizzleClassMethod(NSBundle.class, @selector(appbundleIdentifier), @selector(hook_appbundleIdentifier));
@@ -209,23 +131,6 @@ void installSideStoreHooks(void) {
         SideStoreMyAppsViewController_orig_viewDidload = (void (*)(UICollectionViewController *, SEL))method_getImplementation(viewDidLoadMethod);
         method_setImplementation(viewDidLoadMethod, (IMP)SideStoreMyAppsViewController_hook_viewDidload);
         class_addMethod(PrivClass(MyAppsViewController), @selector(escapeButtonTapped:), (IMP)SideStoreMyAppsViewController_hook_escapeButtonTapped, "v@:@");
-        
-        // add version number
-        SSVersionWindows = [NSMutableDictionary dictionary];
-
-        SSSceneObserver =
-        [NSNotificationCenter.defaultCenter addObserverForName:UISceneDidActivateNotification
-                                                        object:nil
-                                                         queue:NSOperationQueue.mainQueue
-                                                    usingBlock:^(NSNotification *notification) {
-            UIScene *scene = notification.object;
-            
-            if ([scene isKindOfClass:UIWindowScene.class]) {
-                SSInstallVersionWindow((UIWindowScene *)scene);
-            }
-        }];
-        
-        
         
     }
     
