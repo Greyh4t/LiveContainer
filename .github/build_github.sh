@@ -41,7 +41,7 @@ mv ./tmp/SideStoreSupport.framework Payload/LiveContainer.app/Frameworks
 
 # download SideStore
 cd tmp
-wget https://github.com/Greyh4t/SideStore/releases/download/livecontainer-background-refresh-legacy-clean/SideStore.ipa
+wget https://github.com/Greyh4t/SideStore/releases/download/livecontainer-oda-state-cleaner/SideStore.ipa
 unzip SideStore.ipa
 cd ..
 
