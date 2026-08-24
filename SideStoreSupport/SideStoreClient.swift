@@ -16,8 +16,9 @@ struct SideStoreIntentCaller {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
             PrivateIntentRunner.runSideStoreRefresh(progress: progress) { error in
                 if let error {
+                    let nsError = error as NSError
                     NSLog("[LCRefresh] runtime bridge failed domain=%@ code=%d description=%@",
-                          error.domain, error.code, error.localizedDescription)
+                          nsError.domain, nsError.code, nsError.localizedDescription)
                     continuation.resume(throwing: error)
                 } else {
                     NSLog("[LCRefresh] runtime bridge completed successfully")
