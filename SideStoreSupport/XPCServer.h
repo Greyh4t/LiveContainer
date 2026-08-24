@@ -6,6 +6,7 @@
 //
 
 #import <Foundation/Foundation.h>
+#import <Security/Security.h>
 #import <UserNotifications/UserNotifications.h>
 
 __attribute__((swift_attr("@Sendable")))
@@ -19,7 +20,10 @@ __attribute__((swift_attr("@Sendable")))
 @end
 
 @protocol RefreshClient
-- (void)refreshAllAppsWithIdentifier:(NSString*)identifier mangledTypeName:(NSString *)mangledTypeName;
+- (void)refreshAllAppsWithIdentifier:(NSString*)identifier
+                     mangledTypeName:(NSString *)mangledTypeName
+                               adsid:(NSString * _Nullable)adsid
+                          xcodeToken:(NSString * _Nullable)xcodeToken;
 @end
 
 @interface LiveProcessSideStoreHandler : NSObject
@@ -31,6 +35,7 @@ __attribute__((swift_attr("@Sendable")))
 
 NSXPCListener* startAnonymousListener(NSObject<RefreshServer>* reporter);
 NSData* bookmarkForURL(NSURL* url);
+OSStatus LCHostSecItemCopyMatching(CFDictionaryRef query, CFTypeRef _Nullable * _Nullable result);
 
 void installSideStoreHooks(void);
 void installSideStoreNotificationHooks(void);

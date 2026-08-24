@@ -8,6 +8,7 @@
 #include "XPCServer.h"
 #include "../LiveContainer/utils.h"
 #include "../LiveContainer/LCSharedUtils.h"
+#import <objc/message.h>
 @import UIKit;
 
 @interface SideStoreClient(Swift)
@@ -58,9 +59,19 @@ void installSideStoreHooks(void);
     [LCSharedUtils launchToGuestAppWithClassicMode:0];
 }
 
-- (void)refreshAllAppsWithIdentifier:(NSString*)identifier mangledTypeName:(NSString *)mangledTypeName {
+- (void)refreshAllAppsWithIdentifier:(NSString*)identifier
+                     mangledTypeName:(NSString *)mangledTypeName
+                               adsid:(NSString * _Nullable)adsid
+                          xcodeToken:(NSString * _Nullable)xcodeToken {
     if(!handler) {
         return;
+    }
+    Class bridgeClass = NSClassFromString(@"SideStoreLiveProcessRefreshBridge");
+    SEL setter = NSSelectorFromString(@"setEphemeralAuthenticationWithAdsid:xcodeToken:");
+    if (bridgeClass && [bridgeClass respondsToSelector:setter]) {
+        ((void (*)(id, SEL, NSString *, NSString *))objc_msgSend)(bridgeClass, setter, adsid, xcodeToken);
+    } else {
+        NSLog(@"[LCRefresh] ephemeral authentication bridge unavailable");
     }
     [self performRefreshForRealWithIdentifier:identifier mangledTypeName:mangledTypeName server:handler.server];
 }

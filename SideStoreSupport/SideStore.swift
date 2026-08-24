@@ -8,6 +8,40 @@
 import Foundation
 import AppIntents
 import UserNotifications
+import Security
+
+@_silgen_name("SecTaskCreateFromSelf")
+private func SecTaskCreateFromSelf(_ allocator: CFAllocator?) -> CFTypeRef
+
+@_silgen_name("SecTaskCopyValueForEntitlement")
+private func SecTaskCopyValueForEntitlement(
+    _ task: CFTypeRef,
+    _ entitlement: CFString,
+    _ error: UnsafeMutablePointer<Unmanaged<CFError>?>?
+) -> Unmanaged<CFTypeRef>?
+
+private func sharedAuthenticationValue(forKey key: String) -> String? {
+    let task = SecTaskCreateFromSelf(nil)
+    guard let value = SecTaskCopyValueForEntitlement(task, "keychain-access-groups" as CFString, nil)?.takeRetainedValue(),
+          let groups = value as? [String],
+          let accessGroup = groups.first(where: { $0.hasSuffix(".com.kdt.livecontainer.shared") })
+    else { return nil }
+
+    let query: [CFString: Any] = [
+        kSecClass: kSecClassGenericPassword,
+        kSecAttrService: "com.kdt.livecontainer",
+        kSecAttrAccount: key,
+        kSecAttrAccessGroup: accessGroup,
+        kSecAttrSynchronizable: kSecAttrSynchronizableAny,
+        kSecReturnData: true,
+        kSecMatchLimit: kSecMatchLimitOne
+    ]
+    var result: CFTypeRef?
+    guard LCHostSecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+          let data = result as? Data
+    else { return nil }
+    return String(data: data, encoding: .utf8)
+}
 
 @available(iOS 17.0, *)
 func performIntentRefresh(identifier: String, mangledTypeName: String, intentProgress: Progress) async throws {
@@ -190,8 +224,14 @@ class RefreshHandler: NSObject, RefreshServer {
 
         try await withUnsafeThrowingContinuation { c in
             self.c = c
-            NSLog("[LCRefresh] sending refresh request intent=%@", identifier)
-            client.refreshAllApps(withIdentifier: identifier, mangledTypeName: mangledName)
+            let adsid = sharedAuthenticationValue(forKey: "appleIDAdsid")
+            let xcodeToken = sharedAuthenticationValue(forKey: "appleIDXcodeToken")
+            NSLog("[LCRefresh] sending refresh request intent=%@ hasADSID=%d hasXcodeToken=%d",
+                  identifier, adsid != nil, xcodeToken != nil)
+            client.refreshAllApps(withIdentifier: identifier,
+                                  mangledTypeName: mangledName,
+                                  adsid: adsid,
+                                  xcodeToken: xcodeToken)
         }
         
     }

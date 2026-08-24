@@ -25,6 +25,10 @@ OSStatus (*orig_SecKeyGeneratePair)(CFDictionaryRef query, SecKeyRef *publicKey,
 NSString* accessGroup = nil;
 NSString* containerId = nil;
 
+OSStatus LCHostSecItemCopyMatching(CFDictionaryRef query, CFTypeRef *result) {
+    return orig_SecItemCopyMatching(query, result);
+}
+
 OSStatus new_SecItemAdd(CFDictionaryRef attributes, CFTypeRef *result) {
     NSMutableDictionary *attributesCopy = ((__bridge NSDictionary *)attributes).mutableCopy;
     attributesCopy[(__bridge id)kSecAttrAccessGroup] = accessGroup;
