@@ -12,11 +12,10 @@ import UserNotifications
 @available(iOS 17.0, *)
 func performIntentRefresh(identifier: String, mangledTypeName: String, intentProgress: Progress) async throws {
     intentProgress.totalUnitCount = 100
-    NSLog("[LCRefresh] route begin process=%@ bundle=%@ isSideStore=%d isLiveProcess=%d hasLC_HOME=%d hasLP_HOME=%d intent=%@",
+    NSLog("[LCRefresh] route begin process=%@ bundle=%@ isSideStore=%d hasLC_HOME=%d hasLP_HOME=%d intent=%@",
           ProcessInfo.processInfo.processName,
           Bundle.main.bundleIdentifier ?? "nil",
           UserDefaults.isSideStore(),
-          UserDefaults.isLiveProcess(),
           getenv("LC_HOME_PATH") != nil,
           getenv("LP_HOME_PATH") != nil,
           identifier)
@@ -153,8 +152,8 @@ class RefreshHandler: NSObject, RefreshServer {
             self.didFinishLaunching = false
             NSLog("[LCRefresh] beginning LiveProcess extension request")
             
-            ext.setRequestInterruptionBlock { uuid in
-                NSLog("[LCRefresh] LiveProcess request interrupted uuid=%@ pid=%d", uuid.uuidString, self.sideStorePid)
+            ext.setRequestInterruptionBlock { _ in
+                NSLog("[LCRefresh] LiveProcess request interrupted pid=%d", self.sideStorePid)
                 self.c?.resume(throwing: NSError(domain: "SideStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "Built-in SideStore quit unexpectedly"]))
                 self.c = nil
                 self.sideStorePid = 0
@@ -166,7 +165,7 @@ class RefreshHandler: NSObject, RefreshServer {
             
             let uuid = await ext.beginRequest(withInputItems: [extensionItem])
             sideStorePid = ext.pid(forRequestIdentifier: uuid)
-            NSLog("[LCRefresh] LiveProcess request began uuid=%@ pid=%d", uuid.uuidString, sideStorePid)
+            NSLog("[LCRefresh] LiveProcess request began pid=%d", sideStorePid)
             
             try await withUnsafeThrowingContinuation { c in
                 if self.didFinishLaunching {
