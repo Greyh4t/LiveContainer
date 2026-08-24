@@ -40,9 +40,9 @@ mv ./tmp/SideStoreSupport.framework Payload/LiveContainer.app/Frameworks
 /usr/libexec/PlistBuddy -c "Add :PreferenceSpecifiers:3:DefaultValue bool false" ./Payload/LiveContainer.app/Settings.bundle/Root.plist
 
 # download SideStore
-# Pinned diagnostic SideStore source commit: 46d5627b
+# Pinned clean SideStore release.
 cd tmp
-wget https://github.com/Greyh4t/SideStore/releases/download/livecontainer-diagnostic-anisette-recovery/SideStore.ipa
+wget https://github.com/Greyh4t/SideStore/releases/download/livecontainer-background-refresh-clean/SideStore.ipa
 unzip SideStore.ipa
 cd ..
 

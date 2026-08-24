@@ -12,16 +12,11 @@ struct SideStoreIntentCaller {
     static let shared = SideStoreIntentCaller()
 
     private func callBackgroundRefresh(progress: Progress) async throws {
-        NSLog("[LCRefresh] invoking in-process SideStore runtime bridge")
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
             PrivateIntentRunner.runSideStoreRefresh(progress: progress) { error in
                 if let error {
-                    let nsError = error as NSError
-                    NSLog("[LCRefresh] runtime bridge failed domain=%@ code=%d description=%@",
-                          nsError.domain, nsError.code, nsError.localizedDescription)
                     continuation.resume(throwing: error)
                 } else {
-                    NSLog("[LCRefresh] runtime bridge completed successfully")
                     continuation.resume()
                 }
             }
@@ -45,7 +40,6 @@ struct SideStoreIntentCaller {
 @objc extension SideStoreClient {
     @objc(performRefreshForRealWithIdentifier:mangledTypeName:server:)
     func performRefreshForReal(identifier: String, mangledTypeName: String, server: any RefreshServer) {
-        NSLog("[LCRefresh] LiveProcess received refresh request intent=%@", identifier)
         Task {
             do {
                 var obs: NSKeyValueObservation? = nil
@@ -59,7 +53,6 @@ struct SideStoreIntentCaller {
                 obs?.invalidate()
                 server.finish(nil)
             } catch {
-                NSLog("[LCRefresh] LiveProcess refresh task failed=%@", error.localizedDescription)
                 server.finish(error.localizedDescription)
             }
         }

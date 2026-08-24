@@ -46,18 +46,9 @@ private func sharedAuthenticationValue(forKey key: String) -> String? {
 @available(iOS 17.0, *)
 func performIntentRefresh(identifier: String, mangledTypeName: String, intentProgress: Progress) async throws {
     intentProgress.totalUnitCount = 100
-    NSLog("[LCRefresh] route begin process=%@ bundle=%@ isSideStore=%d hasLC_HOME=%d hasLP_HOME=%d intent=%@",
-          ProcessInfo.processInfo.processName,
-          Bundle.main.bundleIdentifier ?? "nil",
-          UserDefaults.isSideStore(),
-          getenv("LC_HOME_PATH") != nil,
-          getenv("LP_HOME_PATH") != nil,
-          identifier)
     if UserDefaults.isSideStore() {
-        NSLog("[LCRefresh] route=direct-runtime-bridge")
         try await SideStoreIntentCaller.shared.callRefreshIntent(mangledTypeName: mangledTypeName, progress: intentProgress)
     } else {
-        NSLog("[LCRefresh] route=liveprocess-xpc")
         RefreshHandler.shared.progress = intentProgress
         try await RefreshHandler.shared.startRefresh(identifier: identifier, mangledName: mangledTypeName)
     }
@@ -123,11 +114,7 @@ class RefreshHandler: NSObject, RefreshServer {
     static var shared = RefreshHandler()
     
     func startRefresh(identifier: String, mangledName: String) async throws {
-        NSLog("[LCRefresh] xpc start pid=%d pidAlive=%d listener=%d client=%d launching=%d activeRefresh=%d",
-              sideStorePid, sideStorePid > 0 && getpgid(sideStorePid) > 0,
-              listener != nil, client != nil, launchContinuation != nil, c != nil)
         if sideStorePid <= 0 || getpgid(sideStorePid) <= 0, let c {
-            NSLog("[LCRefresh] stale refresh continuation found; failing it")
             c.resume(throwing: NSError(domain: "SideStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "Built-in SideStore quit unexpectedly"]))
             self.c = nil
         }
@@ -138,11 +125,9 @@ class RefreshHandler: NSObject, RefreshServer {
         
         if listener == nil {
             guard let listener = startAnonymousListener(self) else {
-                NSLog("[LCRefresh] anonymous listener creation failed")
                 throw NSError(domain: "SideStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unable to create the SideStore background listener."])
             }
             self.listener = listener
-            NSLog("[LCRefresh] anonymous listener ready")
         }
         guard let listener = self.listener else {
             throw NSError(domain: "SideStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "SideStore background listener is unavailable."])
@@ -153,7 +138,6 @@ class RefreshHandler: NSObject, RefreshServer {
             let lcHome = String(cString:getenv("LC_HOME_PATH"))
             let sideStoreHomeURL = URL(fileURLWithPath: lcHome).appendingPathComponent("Documents/SideStore")
             guard let bookmarkData = bookmarkForURL(sideStoreHomeURL) else {
-                NSLog("[LCRefresh] SideStore directory bookmark creation failed")
                 throw NSError(domain: "SideStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unable to access the built-in SideStore data directory."])
             }
 
@@ -184,10 +168,8 @@ class RefreshHandler: NSObject, RefreshServer {
             }
             self.ext = ext
             self.didFinishLaunching = false
-            NSLog("[LCRefresh] beginning LiveProcess extension request")
             
             ext.setRequestInterruptionBlock { _ in
-                NSLog("[LCRefresh] LiveProcess request interrupted pid=%d", self.sideStorePid)
                 self.c?.resume(throwing: NSError(domain: "SideStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "Built-in SideStore quit unexpectedly"]))
                 self.c = nil
                 self.sideStorePid = 0
@@ -199,11 +181,9 @@ class RefreshHandler: NSObject, RefreshServer {
             
             let uuid = await ext.beginRequest(withInputItems: [extensionItem])
             sideStorePid = ext.pid(forRequestIdentifier: uuid)
-            NSLog("[LCRefresh] LiveProcess request began pid=%d", sideStorePid)
             
             try await withUnsafeThrowingContinuation { c in
                 if self.didFinishLaunching {
-                    NSLog("[LCRefresh] LiveProcess launch completed before continuation installation")
                     c.resume()
                     return
                 }
@@ -218,7 +198,6 @@ class RefreshHandler: NSObject, RefreshServer {
             }
         }
         guard let client = self.client else {
-            NSLog("[LCRefresh] no XPC client after launch pid=%d", sideStorePid)
             throw NSError(domain: "SideStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "Built-in SideStore failed to connect."])
         }
 
@@ -228,8 +207,6 @@ class RefreshHandler: NSObject, RefreshServer {
             let xcodeToken = sharedAuthenticationValue(forKey: "appleIDXcodeToken")
             let anisetteIdentifier = sharedAuthenticationValue(forKey: "identifier")
             let anisetteAdiPb = sharedAuthenticationValue(forKey: "adiPb")
-            NSLog("[LCRefresh] sending refresh request intent=%@ hasADSID=%d hasXcodeToken=%d hasIdentifier=%d hasAdiPb=%d",
-                  identifier, adsid != nil, xcodeToken != nil, anisetteIdentifier != nil, anisetteAdiPb != nil)
             client.refreshAllApps(withIdentifier: identifier,
                                   mangledTypeName: mangledName,
                                   adsid: adsid,
@@ -246,24 +223,20 @@ class RefreshHandler: NSObject, RefreshServer {
     
     func finish(_ error: String?) {
         if let error {
-            NSLog("[LCRefresh] refresh finished with error=%@", error)
             c?.resume(throwing: NSError(domain: "SideStore", code: 1, userInfo: [NSLocalizedDescriptionKey: error]))
             c = nil
         } else {
-            NSLog("[LCRefresh] refresh finished successfully")
             c?.resume()
             c = nil
         }
     }
     
     func onConnection(_ connection: NSXPCConnection!) {
-        NSLog("[LCRefresh] XPC client connected")
         connection.remoteObjectInterface = NSXPCInterface(with: RefreshClient.self)
         client = connection.remoteObjectProxy as? RefreshClient
     }
     
     func finishedLaunching() {
-        NSLog("[LCRefresh] LiveProcess reported finishedLaunching client=%d", client != nil)
         didFinishLaunching = true
         launchContinuation?.resume()
         launchContinuation = nil

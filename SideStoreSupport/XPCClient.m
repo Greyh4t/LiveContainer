@@ -78,7 +78,8 @@ void installSideStoreHooks(void);
                                                                                          anisetteIdentifier,
                                                                                          anisetteAdiPb);
     } else {
-        NSLog(@"[LCRefresh] ephemeral authentication bridge unavailable");
+        [handler.server finish:@"Built-in SideStore authentication bridge is unavailable."];
+        return;
     }
     [self performRefreshForRealWithIdentifier:identifier mangledTypeName:mangledTypeName server:handler.server];
 }
