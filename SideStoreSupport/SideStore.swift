@@ -12,9 +12,19 @@ import UserNotifications
 @available(iOS 17.0, *)
 func performIntentRefresh(identifier: String, mangledTypeName: String, intentProgress: Progress) async throws {
     intentProgress.totalUnitCount = 100
+    NSLog("[LCRefresh] route begin process=%@ bundle=%@ isSideStore=%d isLiveProcess=%d hasLC_HOME=%d hasLP_HOME=%d intent=%@",
+          ProcessInfo.processInfo.processName,
+          Bundle.main.bundleIdentifier ?? "nil",
+          UserDefaults.isSideStore(),
+          UserDefaults.isLiveProcess(),
+          getenv("LC_HOME_PATH") != nil,
+          getenv("LP_HOME_PATH") != nil,
+          identifier)
     if UserDefaults.isSideStore() {
+        NSLog("[LCRefresh] route=direct-runtime-bridge")
         try await SideStoreIntentCaller.shared.callRefreshIntent(mangledTypeName: mangledTypeName, progress: intentProgress)
     } else {
+        NSLog("[LCRefresh] route=liveprocess-xpc")
         RefreshHandler.shared.progress = intentProgress
         try await RefreshHandler.shared.startRefresh(identifier: identifier, mangledName: mangledTypeName)
     }
@@ -80,7 +90,11 @@ class RefreshHandler: NSObject, RefreshServer {
     static var shared = RefreshHandler()
     
     func startRefresh(identifier: String, mangledName: String) async throws {
+        NSLog("[LCRefresh] xpc start pid=%d pidAlive=%d listener=%d client=%d launching=%d activeRefresh=%d",
+              sideStorePid, sideStorePid > 0 && getpgid(sideStorePid) > 0,
+              listener != nil, client != nil, launchContinuation != nil, c != nil)
         if sideStorePid <= 0 || getpgid(sideStorePid) <= 0, let c {
+            NSLog("[LCRefresh] stale refresh continuation found; failing it")
             c.resume(throwing: NSError(domain: "SideStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "Built-in SideStore quit unexpectedly"]))
             self.c = nil
         }
@@ -91,12 +105,14 @@ class RefreshHandler: NSObject, RefreshServer {
         
         if listener == nil {
             guard let listener = startAnonymousListener(self) else {
-                return
+                NSLog("[LCRefresh] anonymous listener creation failed")
+                throw NSError(domain: "SideStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unable to create the SideStore background listener."])
             }
             self.listener = listener
+            NSLog("[LCRefresh] anonymous listener ready")
         }
         guard let listener = self.listener else {
-            return
+            throw NSError(domain: "SideStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "SideStore background listener is unavailable."])
         }
 
         // launch SideStore if it's not running
@@ -104,6 +120,7 @@ class RefreshHandler: NSObject, RefreshServer {
             let lcHome = String(cString:getenv("LC_HOME_PATH"))
             let sideStoreHomeURL = URL(fileURLWithPath: lcHome).appendingPathComponent("Documents/SideStore")
             guard let bookmarkData = bookmarkForURL(sideStoreHomeURL) else {
+                NSLog("[LCRefresh] SideStore directory bookmark creation failed")
                 throw NSError(domain: "SideStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unable to access the built-in SideStore data directory."])
             }
 
@@ -134,8 +151,10 @@ class RefreshHandler: NSObject, RefreshServer {
             }
             self.ext = ext
             self.didFinishLaunching = false
+            NSLog("[LCRefresh] beginning LiveProcess extension request")
             
             ext.setRequestInterruptionBlock { uuid in
+                NSLog("[LCRefresh] LiveProcess request interrupted uuid=%@ pid=%d", uuid.uuidString, self.sideStorePid)
                 self.c?.resume(throwing: NSError(domain: "SideStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "Built-in SideStore quit unexpectedly"]))
                 self.c = nil
                 self.sideStorePid = 0
@@ -147,9 +166,11 @@ class RefreshHandler: NSObject, RefreshServer {
             
             let uuid = await ext.beginRequest(withInputItems: [extensionItem])
             sideStorePid = ext.pid(forRequestIdentifier: uuid)
+            NSLog("[LCRefresh] LiveProcess request began uuid=%@ pid=%d", uuid.uuidString, sideStorePid)
             
             try await withUnsafeThrowingContinuation { c in
                 if self.didFinishLaunching {
+                    NSLog("[LCRefresh] LiveProcess launch completed before continuation installation")
                     c.resume()
                     return
                 }
@@ -164,11 +185,13 @@ class RefreshHandler: NSObject, RefreshServer {
             }
         }
         guard let client = self.client else {
+            NSLog("[LCRefresh] no XPC client after launch pid=%d", sideStorePid)
             throw NSError(domain: "SideStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "Built-in SideStore failed to connect."])
         }
 
         try await withUnsafeThrowingContinuation { c in
             self.c = c
+            NSLog("[LCRefresh] sending refresh request intent=%@", identifier)
             client.refreshAllApps(withIdentifier: identifier, mangledTypeName: mangledName)
         }
         
@@ -180,20 +203,24 @@ class RefreshHandler: NSObject, RefreshServer {
     
     func finish(_ error: String?) {
         if let error {
+            NSLog("[LCRefresh] refresh finished with error=%@", error)
             c?.resume(throwing: NSError(domain: "SideStore", code: 1, userInfo: [NSLocalizedDescriptionKey: error]))
             c = nil
         } else {
+            NSLog("[LCRefresh] refresh finished successfully")
             c?.resume()
             c = nil
         }
     }
     
     func onConnection(_ connection: NSXPCConnection!) {
+        NSLog("[LCRefresh] XPC client connected")
         connection.remoteObjectInterface = NSXPCInterface(with: RefreshClient.self)
         client = connection.remoteObjectProxy as? RefreshClient
     }
     
     func finishedLaunching() {
+        NSLog("[LCRefresh] LiveProcess reported finishedLaunching client=%d", client != nil)
         didFinishLaunching = true
         launchContinuation?.resume()
         launchContinuation = nil
