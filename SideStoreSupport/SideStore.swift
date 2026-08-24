@@ -36,9 +36,9 @@ private func sharedAuthenticationValue(forKey key: String) -> String? {
         kSecReturnData: true,
         kSecMatchLimit: kSecMatchLimitOne
     ]
-    var result: CFTypeRef?
+    var result: Unmanaged<CFTypeRef>?
     guard LCHostSecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-          let data = result as? Data
+          let data = result?.takeRetainedValue() as? Data
     else { return nil }
     return String(data: data, encoding: .utf8)
 }
