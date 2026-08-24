@@ -23,7 +23,9 @@ __attribute__((swift_attr("@Sendable")))
 - (void)refreshAllAppsWithIdentifier:(NSString*)identifier
                      mangledTypeName:(NSString *)mangledTypeName
                                adsid:(NSString * _Nullable)adsid
-                          xcodeToken:(NSString * _Nullable)xcodeToken;
+                          xcodeToken:(NSString * _Nullable)xcodeToken
+                  anisetteIdentifier:(NSString * _Nullable)anisetteIdentifier
+                       anisetteAdiPb:(NSString * _Nullable)anisetteAdiPb;
 @end
 
 @interface LiveProcessSideStoreHandler : NSObject

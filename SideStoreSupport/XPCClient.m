@@ -62,14 +62,21 @@ void installSideStoreHooks(void);
 - (void)refreshAllAppsWithIdentifier:(NSString*)identifier
                      mangledTypeName:(NSString *)mangledTypeName
                                adsid:(NSString * _Nullable)adsid
-                          xcodeToken:(NSString * _Nullable)xcodeToken {
+                          xcodeToken:(NSString * _Nullable)xcodeToken
+                  anisetteIdentifier:(NSString * _Nullable)anisetteIdentifier
+                       anisetteAdiPb:(NSString * _Nullable)anisetteAdiPb {
     if(!handler) {
         return;
     }
     Class bridgeClass = NSClassFromString(@"SideStoreLiveProcessRefreshBridge");
-    SEL setter = NSSelectorFromString(@"setEphemeralAuthenticationWithAdsid:xcodeToken:");
+    SEL setter = NSSelectorFromString(@"setEphemeralAuthenticationWithAdsid:xcodeToken:anisetteIdentifier:anisetteAdiPb:");
     if (bridgeClass && [bridgeClass respondsToSelector:setter]) {
-        ((void (*)(id, SEL, NSString *, NSString *))objc_msgSend)(bridgeClass, setter, adsid, xcodeToken);
+        ((void (*)(id, SEL, NSString *, NSString *, NSString *, NSString *))objc_msgSend)(bridgeClass,
+                                                                                         setter,
+                                                                                         adsid,
+                                                                                         xcodeToken,
+                                                                                         anisetteIdentifier,
+                                                                                         anisetteAdiPb);
     } else {
         NSLog(@"[LCRefresh] ephemeral authentication bridge unavailable");
     }

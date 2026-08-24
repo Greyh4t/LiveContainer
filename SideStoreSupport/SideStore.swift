@@ -226,12 +226,16 @@ class RefreshHandler: NSObject, RefreshServer {
             self.c = c
             let adsid = sharedAuthenticationValue(forKey: "appleIDAdsid")
             let xcodeToken = sharedAuthenticationValue(forKey: "appleIDXcodeToken")
-            NSLog("[LCRefresh] sending refresh request intent=%@ hasADSID=%d hasXcodeToken=%d",
-                  identifier, adsid != nil, xcodeToken != nil)
+            let anisetteIdentifier = sharedAuthenticationValue(forKey: "identifier")
+            let anisetteAdiPb = sharedAuthenticationValue(forKey: "adiPb")
+            NSLog("[LCRefresh] sending refresh request intent=%@ hasADSID=%d hasXcodeToken=%d hasIdentifier=%d hasAdiPb=%d",
+                  identifier, adsid != nil, xcodeToken != nil, anisetteIdentifier != nil, anisetteAdiPb != nil)
             client.refreshAllApps(withIdentifier: identifier,
                                   mangledTypeName: mangledName,
                                   adsid: adsid,
-                                  xcodeToken: xcodeToken)
+                                  xcodeToken: xcodeToken,
+                                  anisetteIdentifier: anisetteIdentifier,
+                                  anisetteAdiPb: anisetteAdiPb)
         }
         
     }
