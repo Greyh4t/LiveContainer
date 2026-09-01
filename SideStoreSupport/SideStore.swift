@@ -36,14 +36,14 @@ private func sharedAuthenticationValue(forKey key: String) -> String? {
         kSecReturnData: true,
         kSecMatchLimit: kSecMatchLimitOne
     ]
-    var result: Unmanaged<CFTypeRef>?
+    var result: CFTypeRef?
     // SideStoreSupport is loaded by AppIntents independently of the host app.
     // Do not call a symbol implemented only by the LiveContainer executable here:
     // dead stripping can remove it, causing the intent framework to fail to load
     // before perform() is reached. This path runs in the unhooked host process, so
     // the system Security API reads the host keychain directly.
     guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-          let data = result?.takeRetainedValue() as? Data
+          let data = result as? Data
     else { return nil }
     return String(data: data, encoding: .utf8)
 }
