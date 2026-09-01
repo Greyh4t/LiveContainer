@@ -37,7 +37,12 @@ private func sharedAuthenticationValue(forKey key: String) -> String? {
         kSecMatchLimit: kSecMatchLimitOne
     ]
     var result: Unmanaged<CFTypeRef>?
-    guard LCHostSecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+    // SideStoreSupport is loaded by AppIntents independently of the host app.
+    // Do not call a symbol implemented only by the LiveContainer executable here:
+    // dead stripping can remove it, causing the intent framework to fail to load
+    // before perform() is reached. This path runs in the unhooked host process, so
+    // the system Security API reads the host keychain directly.
+    guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
           let data = result?.takeRetainedValue() as? Data
     else { return nil }
     return String(data: data, encoding: .utf8)
@@ -135,7 +140,10 @@ class RefreshHandler: NSObject, RefreshServer {
 
         // launch SideStore if it's not running
         if (sideStorePid <= 0 || getpgid(sideStorePid) <= 0) && launchContinuation == nil {
-            let lcHome = String(cString:getenv("LC_HOME_PATH"))
+            guard let lcHomePointer = getenv("LC_HOME_PATH") else {
+                throw NSError(domain: "SideStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "LiveContainer data directory is unavailable. Open LiveContainer once, then run the shortcut again."])
+            }
+            let lcHome = String(cString: lcHomePointer)
             let sideStoreHomeURL = URL(fileURLWithPath: lcHome).appendingPathComponent("Documents/SideStore")
             guard let bookmarkData = bookmarkForURL(sideStoreHomeURL) else {
                 throw NSError(domain: "SideStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unable to access the built-in SideStore data directory."])
